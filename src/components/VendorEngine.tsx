@@ -80,11 +80,13 @@ export const VendorEngine: React.FC<VendorEngineProps> = ({
             <Filter className="w-3.5 h-3.5" />
             <span className="font-semibold">Filter by Criticality:</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1" role="group" aria-label="Filter vendors by criticality">
             {(['All', 'High', 'Medium', 'Low'] as const).map((crit) => (
               <button
                 key={crit}
                 onClick={() => setCriticalityFilter(crit)}
+                aria-pressed={criticalityFilter === crit}
+                aria-label={`Filter vendors: ${crit}`}
                 className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
                   criticalityFilter === crit
                     ? 'bg-rose-600 text-white shadow-sm'
@@ -149,6 +151,7 @@ export const VendorEngine: React.FC<VendorEngineProps> = ({
                 </span>
                 <select
                   value={vendor.status}
+                  aria-label={`Procurement status for ${vendor.vendorRole}`}
                   onChange={(e) => onUpdateVendorStatus(vendor.id, e.target.value as VendorStatus)}
                   className={`text-xs font-semibold px-2.5 py-1 rounded-lg border focus:outline-none focus:ring-2 focus:ring-rose-500 ${
                     vendor.status === 'Booked'

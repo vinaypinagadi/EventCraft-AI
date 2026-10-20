@@ -117,31 +117,46 @@ export function clonePlan(plan: FullEventPlan, customName?: string): FullEventPl
 }
 
 /**
- * Validate and sanitize an imported JSON object as a FullEventPlan
+ * Validate, sanitize, and harden an imported JSON object as a FullEventPlan.
+ * Guards against Prototype Pollution (__proto__, constructor) and malformed shapes.
  */
 export function validateImportedPlan(data: unknown): FullEventPlan | null {
-  if (!data || typeof data !== 'object') return null;
-  const p = data as Record<string, any>;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
 
+  // Prototype pollution security check
   if (
-    !p.summary ||
-    typeof p.summary.title !== 'string' ||
-    !p.budget ||
-    typeof p.budget.totalBudget !== 'number' ||
-    !p.timeline ||
-    !Array.isArray(p.timeline.milestones) ||
-    !p.vendors ||
-    !Array.isArray(p.vendors)
+    Object.prototype.hasOwnProperty.call(data, '__proto__') ||
+    Object.prototype.hasOwnProperty.call(data, 'constructor') ||
+    Object.prototype.hasOwnProperty.call(data, 'prototype')
   ) {
     return null;
   }
 
-  // Ensure unique ID
+  const p = data as Record<string, unknown>;
+
+  const summary = p.summary as Record<string, unknown> | undefined;
+  const budget = p.budget as Record<string, unknown> | undefined;
+  const timeline = p.timeline as Record<string, unknown> | undefined;
+  const vendors = p.vendors;
+
+  if (
+    !summary ||
+    typeof summary.title !== 'string' ||
+    !budget ||
+    typeof budget.totalBudget !== 'number' ||
+    !timeline ||
+    !Array.isArray(timeline.milestones) ||
+    !Array.isArray(vendors)
+  ) {
+    return null;
+  }
+
+  // Ensure unique ID and clean ISO timestamp
   const timestamp = Date.now();
   return {
-    ...p,
+    ...(p as unknown as FullEventPlan),
     id: `plan-import-${timestamp}`,
     lastUpdated: new Date().toISOString(),
     source: 'modified',
-  } as FullEventPlan;
+  };
 }

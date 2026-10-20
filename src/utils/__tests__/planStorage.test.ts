@@ -71,6 +71,13 @@ describe('planStorage utilities', () => {
   it('rejects invalid plan JSON', () => {
     expect(validateImportedPlan(null)).toBeNull();
     expect(validateImportedPlan({})).toBeNull();
+    expect(validateImportedPlan([])).toBeNull();
+    expect(validateImportedPlan('not an object')).toBeNull();
     expect(validateImportedPlan({ summary: { title: 123 } })).toBeNull();
+  });
+
+  it('rejects payload with prototype pollution attempt', () => {
+    const maliciousPayload = JSON.parse('{"__proto__": {"polluted": true}, "summary": {"title": "Hack"}}');
+    expect(validateImportedPlan(maliciousPayload)).toBeNull();
   });
 });

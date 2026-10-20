@@ -57,8 +57,14 @@ export const TimelineEngine: React.FC<TimelineEngineProps> = ({
           </div>
 
           {/* Tab Selector */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 self-start sm:self-auto">
+          <div
+            role="tablist"
+            aria-label="Timeline Views"
+            className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 self-start sm:self-auto"
+          >
             <button
+              role="tab"
+              aria-selected={activeTab === 'macro'}
               onClick={() => setActiveTab('macro')}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                 activeTab === 'macro'
@@ -70,6 +76,8 @@ export const TimelineEngine: React.FC<TimelineEngineProps> = ({
               <span>Macro Countdown</span>
             </button>
             <button
+              role="tab"
+              aria-selected={activeTab === 'micro'}
               onClick={() => setActiveTab('micro')}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                 activeTab === 'micro'

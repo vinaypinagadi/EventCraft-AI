@@ -225,6 +225,11 @@ export const BudgetEngine: React.FC<BudgetEngineProps> = ({
                     step="0.5"
                     disabled={item.locked}
                     value={item.percentage}
+                    aria-label={`Adjust budget share for ${item.name}`}
+                    aria-valuemin={1}
+                    aria-valuemax={65}
+                    aria-valuenow={item.percentage}
+                    aria-valuetext={`${item.percentage.toFixed(1)} percent, ${formatCurrency(item.allocatedAmount, currency)}`}
                     onChange={(e) => handlePercentageChange(item.id, Number(e.target.value))}
                     className={`w-full accent-rose-500 cursor-pointer ${item.locked ? 'opacity-40 cursor-not-allowed' : ''}`}
                   />

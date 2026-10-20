@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   PieChart,
   Calendar,
@@ -17,20 +17,15 @@ import {
   FullEventPlan,
   VendorStatus,
 } from './types/event';
-import { DEMO_PRESETS } from './data/presets';
 import { generateEventPlan, getActiveApiKey } from './services/aiPlannerService';
 import {
   applyCrisisAdjustment,
   formatCurrency,
   generateDefaultBudgetDistribution,
 } from './utils/plannerLogic';
-import {
-  loadSavedPlans,
-  saveSavedPlans,
-  loadActivePlanId,
-  saveActivePlanId,
-  clonePlan,
-} from './utils/planStorage';
+import { useTheme } from './hooks/useTheme';
+import { useSavedPlans } from './hooks/useSavedPlans';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Header } from './components/Header';
 import { OnboardingForm } from './components/OnboardingForm';
 import { BudgetEngine } from './components/BudgetEngine';
@@ -42,27 +37,20 @@ import { CrisisSimulatorModal } from './components/CrisisSimulatorModal';
 import { ExportModal } from './components/ExportModal';
 import { SavedPlansModal } from './components/SavedPlansModal';
 
-const LOCAL_STORAGE_PLAN_KEY = 'EVENTCRAFT_ACTIVE_PLAN';
-const LOCAL_STORAGE_THEME_KEY = 'EVENTCRAFT_THEME';
-
-export const App: React.FC = () => {
-  // Theme state
-  const [darkMode, setDarkMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(LOCAL_STORAGE_THEME_KEY);
-      if (saved) return saved === 'dark';
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return false;
-  });
-
-  // Saved Plans Library & Active Plan State
-  const [savedPlans, setSavedPlans] = useState<FullEventPlan[]>(() => loadSavedPlans());
-  const [activePlan, setActivePlan] = useState<FullEventPlan | null>(() => {
-    const plans = loadSavedPlans();
-    const activeId = loadActivePlanId(plans);
-    return plans.find((p) => p.id === activeId) || plans[0] || DEMO_PRESETS.wedding;
-  });
+export const AppContent: React.FC = () => {
+  const { darkMode, toggleDarkMode } = useTheme();
+  const {
+    savedPlans,
+    activePlan,
+    updateActivePlan,
+    selectPlan,
+    duplicatePlan,
+    renamePlan,
+    deletePlan,
+    importPlan,
+    loadPreset,
+    saveNewPlan,
+  } = useSavedPlans();
 
   const [currentView, setCurrentView] = useState<'onboarding' | 'dashboard'>('dashboard');
   const [activeTab, setActiveTab] = useState<'budget' | 'timeline' | 'vendors' | 'ideation'>('budget');
@@ -76,29 +64,6 @@ export const App: React.FC = () => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isSavedPlansModalOpen, setIsSavedPlansModalOpen] = useState(false);
 
-  // Synchronize Dark Mode with DOM
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem(LOCAL_STORAGE_THEME_KEY, 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem(LOCAL_STORAGE_THEME_KEY, 'light');
-    }
-  }, [darkMode]);
-
-  // Persist Saved Plans & Active Plan ID
-  useEffect(() => {
-    saveSavedPlans(savedPlans);
-  }, [savedPlans]);
-
-  useEffect(() => {
-    if (activePlan) {
-      saveActivePlanId(activePlan.id);
-      localStorage.setItem(LOCAL_STORAGE_PLAN_KEY, JSON.stringify(activePlan));
-    }
-  }, [activePlan]);
-
   const showToast = (message: string) => {
     setToastMessage(message);
     setTimeout(() => {
@@ -106,108 +71,44 @@ export const App: React.FC = () => {
     }, 3500);
   };
 
-  const handleToggleDarkMode = () => {
-    setDarkMode((prev) => !prev);
-  };
-
-  /**
-   * Helper to update active plan in state and simultaneously update its record in the saved plans library
-   */
-  const updateActivePlanAndSync = (updatedPlan: FullEventPlan) => {
-    setActivePlan(updatedPlan);
-    setSavedPlans((prev) =>
-      prev.map((p) => (p.id === updatedPlan.id ? updatedPlan : p))
-    );
-  };
-
   const handleSelectPlan = (planId: string) => {
-    const found = savedPlans.find((p) => p.id === planId);
-    if (found) {
-      setActivePlan(found);
-      saveActivePlanId(planId);
+    const success = selectPlan(planId);
+    if (success) {
       setCurrentView('dashboard');
-      showToast(`Switched to "${found.summary.title}"`);
+      showToast('Switched master plan blueprint.');
     }
   };
 
   const handleDuplicatePlan = (planId: string) => {
-    const target = savedPlans.find((p) => p.id === planId);
-    if (!target) return;
-    const cloned = clonePlan(target);
-    setSavedPlans((prev) => [cloned, ...prev]);
-    setActivePlan(cloned);
-    saveActivePlanId(cloned.id);
-    setCurrentView('dashboard');
-    showToast(`Plan duplicated as "${cloned.summary.title}"`);
+    const cloned = duplicatePlan(planId);
+    if (cloned) {
+      setCurrentView('dashboard');
+      showToast(`Plan duplicated as "${cloned.summary.title}"`);
+    }
   };
 
   const handleRenamePlan = (planId: string, newTitle: string) => {
-    setSavedPlans((prev) =>
-      prev.map((p) => {
-        if (p.id === planId) {
-          return {
-            ...p,
-            lastUpdated: new Date().toISOString(),
-            input: { ...p.input, eventName: newTitle },
-            summary: { ...p.summary, title: newTitle },
-          };
-        }
-        return p;
-      })
-    );
-    if (activePlan?.id === planId) {
-      setActivePlan((prev) =>
-        prev
-          ? {
-              ...prev,
-              lastUpdated: new Date().toISOString(),
-              input: { ...prev.input, eventName: newTitle },
-              summary: { ...prev.summary, title: newTitle },
-            }
-          : null
-      );
-    }
+    renamePlan(planId, newTitle);
     showToast(`Plan renamed to "${newTitle}"`);
   };
 
   const handleDeletePlan = (planId: string) => {
-    if (savedPlans.length <= 1) {
-      showToast('Cannot delete the last remaining plan in your library.');
-      return;
-    }
-    const remaining = savedPlans.filter((p) => p.id !== planId);
-    setSavedPlans(remaining);
-    if (activePlan?.id === planId) {
-      const nextPlan: FullEventPlan | null = remaining[0] ?? null;
-      setActivePlan(nextPlan);
-      if (nextPlan) {
-        saveActivePlanId(nextPlan.id);
-        showToast(`Deleted plan. Active blueprint set to "${nextPlan.summary.title}"`);
-      }
+    const success = deletePlan(planId);
+    if (success) {
+      showToast('Plan deleted from library.');
     } else {
-      showToast('Plan removed from library.');
+      showToast('Cannot delete the last remaining plan in your library.');
     }
   };
 
   const handleImportPlan = (plan: FullEventPlan) => {
-    setSavedPlans((prev) => [plan, ...prev.filter((p) => p.id !== plan.id)]);
-    setActivePlan(plan);
-    saveActivePlanId(plan.id);
+    importPlan(plan);
     setCurrentView('dashboard');
     showToast(`Imported "${plan.summary.title}" blueprint successfully!`);
   };
 
   const handleLoadPreset = (vertical: EventVertical) => {
-    const preset = DEMO_PRESETS[vertical];
-    setSavedPlans((prev) => {
-      const exists = prev.some((p) => p.id === preset.id);
-      if (!exists) {
-        return [preset, ...prev];
-      }
-      return prev;
-    });
-    setActivePlan(preset);
-    saveActivePlanId(preset.id);
+    const preset = loadPreset(vertical);
     setCurrentView('dashboard');
     showToast(`Loaded "${preset.summary.title}" demo preset successfully.`);
   };
@@ -216,9 +117,7 @@ export const App: React.FC = () => {
     setIsLoading(true);
     try {
       const plan = await generateEventPlan(input);
-      setSavedPlans((prev) => [plan, ...prev.filter((p) => p.id !== plan.id)]);
-      setActivePlan(plan);
-      saveActivePlanId(plan.id);
+      saveNewPlan(plan);
       setCurrentView('dashboard');
       showToast('Master Blueprint synthesized successfully!');
     } catch (err) {
@@ -231,7 +130,7 @@ export const App: React.FC = () => {
 
   const handleUpdateBudgetItems = (newItems: BudgetItem[]) => {
     if (!activePlan) return;
-    updateActivePlanAndSync({
+    updateActivePlan({
       ...activePlan,
       lastUpdated: new Date().toISOString(),
       source: 'modified',
@@ -259,7 +158,7 @@ export const App: React.FC = () => {
     const updatedMilestones = activePlan.timeline.milestones.map((m) =>
       m.id === id ? { ...m, completed: !m.completed } : m
     );
-    updateActivePlanAndSync({
+    updateActivePlan({
       ...activePlan,
       lastUpdated: new Date().toISOString(),
       timeline: {
@@ -274,7 +173,7 @@ export const App: React.FC = () => {
     const updatedVendors = activePlan.vendors.map((v) =>
       v.id === id ? { ...v, status } : v
     );
-    updateActivePlanAndSync({
+    updateActivePlan({
       ...activePlan,
       lastUpdated: new Date().toISOString(),
       vendors: updatedVendors,
@@ -284,7 +183,7 @@ export const App: React.FC = () => {
 
   const handleSelectActiveConcept = (conceptId: string) => {
     if (!activePlan) return;
-    updateActivePlanAndSync({
+    updateActivePlan({
       ...activePlan,
       lastUpdated: new Date().toISOString(),
       ideation: {
@@ -298,12 +197,20 @@ export const App: React.FC = () => {
   const handleApplyCrisis = (scenarioType: CrisisScenario['type']) => {
     if (!activePlan) return;
     const recalculatedPlan = applyCrisisAdjustment(activePlan, scenarioType);
-    updateActivePlanAndSync(recalculatedPlan);
+    updateActivePlan(recalculatedPlan);
     showToast('Applied What-If contingency adjustments to plan.');
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
+      {/* WCAG Skip Link for Keyboard Accessibility */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:bg-rose-600 focus:text-white focus:rounded-xl focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 font-bold text-xs"
+      >
+        Skip to main content
+      </a>
+
       {/* Toast Notification Region */}
       <div
         className="fixed bottom-5 right-5 z-50 pointer-events-none"
@@ -329,12 +236,17 @@ export const App: React.FC = () => {
         onOpenSavedPlansModal={() => setIsSavedPlansModalOpen(true)}
         savedPlansCount={savedPlans.length}
         darkMode={darkMode}
-        onToggleDarkMode={handleToggleDarkMode}
+        onToggleDarkMode={toggleDarkMode}
         onNewPlanClick={() => setCurrentView('onboarding')}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        role="main"
+        className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 focus:outline-none"
+      >
         {currentView === 'onboarding' ? (
           <div>
             {activePlan && (
@@ -452,8 +364,11 @@ export const App: React.FC = () => {
             <nav
               className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto"
               aria-label="Event Planner Engines"
+              role="tablist"
             >
               <button
+                role="tab"
+                aria-selected={activeTab === 'budget'}
                 onClick={() => setActiveTab('budget')}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
                   activeTab === 'budget'
@@ -466,6 +381,8 @@ export const App: React.FC = () => {
               </button>
 
               <button
+                role="tab"
+                aria-selected={activeTab === 'timeline'}
                 onClick={() => setActiveTab('timeline')}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
                   activeTab === 'timeline'
@@ -478,6 +395,8 @@ export const App: React.FC = () => {
               </button>
 
               <button
+                role="tab"
+                aria-selected={activeTab === 'vendors'}
                 onClick={() => setActiveTab('vendors')}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
                   activeTab === 'vendors'
@@ -490,6 +409,8 @@ export const App: React.FC = () => {
               </button>
 
               <button
+                role="tab"
+                aria-selected={activeTab === 'ideation'}
                 onClick={() => setActiveTab('ideation')}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
                   activeTab === 'ideation'
@@ -572,12 +493,12 @@ export const App: React.FC = () => {
               Export Blueprint
             </button>
             <a
-              href="https://github.com"
+              href="https://github.com/vinaypinagadi/EventCraft-AI"
               target="_blank"
-              rel="noreferrer noopener"
+              rel="noopener noreferrer"
               className="hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
             >
-              GitHub Submission
+              GitHub Repository
             </a>
           </div>
         </div>
@@ -621,6 +542,14 @@ export const App: React.FC = () => {
         }}
       />
     </div>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
   );
 };
 
