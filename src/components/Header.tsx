@@ -11,6 +11,7 @@ import {
   PartyPopper,
   Trees,
   CheckCircle2,
+  FolderOpen,
 } from 'lucide-react';
 import { EventVertical } from '../types/event';
 
@@ -21,6 +22,8 @@ interface HeaderProps {
   onOpenKeyModal: () => void;
   onOpenCrisisModal: () => void;
   onOpenExportModal: () => void;
+  onOpenSavedPlansModal: () => void;
+  savedPlansCount: number;
   darkMode: boolean;
   onToggleDarkMode: () => void;
   onNewPlanClick: () => void;
@@ -33,6 +36,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenKeyModal,
   onOpenCrisisModal,
   onOpenExportModal,
+  onOpenSavedPlansModal,
+  savedPlansCount,
   darkMode,
   onToggleDarkMode,
   onNewPlanClick,
@@ -114,6 +119,20 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Action Tools */}
           <div className="flex items-center gap-2">
+            {/* Saved Plans Manager */}
+            <button
+              onClick={onOpenSavedPlansModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-50 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 shadow-sm"
+              title="Manage and switch between saved event blueprints"
+              aria-label={`Open Saved Events Library (${savedPlansCount} saved)`}
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+              <span className="hidden sm:inline font-bold">My Plans</span>
+              <span className="px-1.5 py-0.2 text-[10px] font-extrabold rounded-md bg-rose-200/80 dark:bg-rose-900/80 text-rose-900 dark:text-rose-200">
+                {savedPlansCount}
+              </span>
+            </button>
+
             {/* What-If Crisis Simulator */}
             <button
               onClick={onOpenCrisisModal}
